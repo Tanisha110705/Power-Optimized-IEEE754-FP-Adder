@@ -1,75 +1,126 @@
 # Power-Optimized IEEE-754 Single-Precision Floating-Point Adder
 
-A power- and area-optimized 32-bit IEEE-754 single-precision floating-point adder using a dual-path FAR/CLOSE architecture and explicit operand isolation.
+A 32-bit IEEE-754 single-precision floating-point adder designed to reduce unnecessary switching activity and cell area using a dual-path FAR/CLOSE architecture and explicit operand isolation.
 
-## Project Overview
+## Overview
 
-This project implements and evaluates an IEEE-754 compliant floating-point adder with two main architectural improvements:
+Floating-point addition requires exponent comparison, mantissa alignment, addition or subtraction, leading-zero detection, normalization, rounding, and result packing. A conventional single-path implementation keeps large alignment and normalization logic active even when the input operands do not require those operations.
 
-- **Dual-path FAR/CLOSE architecture** for operands with different exponent separations.
-- **Explicit operand isolation** to reduce unnecessary switching activity in inactive datapaths.
-
-The design was simulated using Cadence Xcelium/SimVision and evaluated through Cadence Genus synthesis and static timing analysis.
-
-## Key Results
-
-| Metric | Result |
-|---|---:|
-| Dynamic power reduction | **11%** |
-| Cell area reduction | **15%** |
-| Setup slack | **+1550 ps** |
-| Verification vectors | **1,004** |
-| Functional errors | **0** |
-| Technology | **GPDK 45 nm** |
-
-The verification set contains **1,000 random vectors** and **4 corner cases**.
+This design separates the datapath into FAR and CLOSE cases based on exponent difference and effective subtraction. Logic in the inactive path is explicitly isolated to reduce switching activity.
 
 ## Architecture
 
-The adder uses two datapath cases:
+### FAR Path
 
-- **FAR path** for operands with a large exponent difference.
-- **CLOSE path** for operands with closely aligned exponents.
+Used when the exponent difference is greater than one.
 
-Explicit operand isolation limits unnecessary switching in inactive logic.
+- Aligns the smaller mantissa using an extended alignment shifter.
+- Performs addition or subtraction on extended mantissas.
+- Requires at most a 1-bit normalization adjustment.
+- Avoids a full normalization barrel shifter.
 
-The datapath covers IEEE-754 single-precision floating-point addition, including operand handling, alignment, significand operation, normalization, rounding, and result packing.
+### CLOSE Path
+
+Used for effective subtraction when the exponent difference is at most one.
+
+- Requires at most a 1-bit alignment shift.
+- Uses a parallel leading-zero detector for cancellation cases.
+- Normalizes the result according to the detected leading-zero count.
+
+### Early Exception Bypass
+
+Zero, infinity, and NaN-related cases are identified before the main arithmetic datapath. These cases can bypass unnecessary datapath activity and directly produce the appropriate IEEE-754 result.
+
+### Explicit Operand Isolation
+
+The inactive FAR or CLOSE datapath receives clamped inputs so that internal nodes do not continue switching when that path is not selected.
+
+## IEEE-754 Single Precision
+
+The design operates on the 32-bit single-precision format:
+
+- 1 sign bit
+- 8 exponent bits
+- 23 fraction bits
+- Implicit leading significand bit for normalized operands
+- Round-to-Nearest-Even handling using guard, round, and sticky information
 
 ## Verification
 
-Simulation used:
+Functional verification and switching-activity analysis were performed using Cadence Xcelium and SimVision.
 
-- Cadence Xcelium
-- Cadence SimVision
+**Test set:**
 
-A total of **1,004 test vectors** were evaluated:
+- 1,000 randomized 32-bit input vectors
+- 4 directed corner cases
+- Total: **1,004 vectors**
+- Functional errors observed: **0**
 
-- 1,000 random vectors
-- 4 corner cases:
-  - 0 + 1
-  - 1 + 0
-  - infinity + 1
-  - 1 + (-1)
+Directed cases included:
 
-No functional errors were observed for the tested vectors.
+- `0 + 1`
+- `1 + 0`
+- `+∞ + 1`
+- `1 + (-1)`
 
-## Synthesis and Timing
+A VCD activity dump was used for power analysis so that switching estimates were based on simulated activity rather than a default statistical activity assumption.
 
-Synthesis used:
+## Synthesis and STA
 
-- Cadence Genus **21.14-s082_1**
-- GPDK **45 nm**
-- PVT: **1.1 V, 0°C**
-- Balanced-tree configuration
-- Area-power balance effort
+The designs were synthesized and analyzed using Cadence Genus.
 
-The implementation uses 32-bit DFF registers for A, B, and RESULT, enabling register-to-register timing analysis.
+| Parameter | Value |
+|---|---|
+| Tool | Cadence Genus 21.14-s082_1 |
+| Technology | GPDK 45 nm |
+| PVT | 1.1 V, 0°C |
+| Configuration | balanced_tree |
+| Optimization | area-power balance |
+| Clock | 200 MHz |
+| Clock period | 5.0 ns |
+| Input/output delay | 0.5 ns |
 
-Real VCD activity was used for switching activity analysis rather than relying on the default activity assumption.
+32-bit DFF register banks were used at the A, B, and RESULT interfaces to establish register-to-register timing paths for static timing analysis.
 
-## Team Project and Documentation
+## Results
 
-This repository contains the shared team implementation for the project. The original team documentation, paper, and project report are available in the public repository maintained by teammate [Ashit Raj](https://github.com/ashitraj634/Power-Optimized-IEEE754-fp-Adder).
+### Area
+
+| Metric | Baseline | Improved | Change |
+|---|---:|---:|---:|
+| Cell count | 1,077 | 894 | -17.0% |
+| Cell area | 1978.8 µm² | 1682.3 µm² | **-15.0%** |
+| Wrapper total area | 2569.8 µm² | 2273.3 µm² | -11.5% |
+
+### Power
+
+| Metric | Baseline | Improved | Change |
+|---|---:|---:|---:|
+| Switching power | 95.02 µW | 84.65 µW | **-10.9%** |
+| Leakage power | 1.063 µW | 0.941 µW | -11.5% |
+| Internal power | 233.08 µW | 242.84 µW | +4.2% |
+| Total power | 329.16 µW | 328.43 µW | -0.2% |
+
+The main power improvement is in switching power, which reflects the reduced activity in the inactive datapath through operand isolation.
+
+### Timing
+
+| Metric | Baseline | Improved |
+|---|---:|---:|
+| Critical path delay | 3218 ps | 3336 ps |
+| Setup slack | +1669 ps | **+1550 ps** |
+| Timing closure | MET | MET |
+
+The improved design has a small timing penalty from the final path-selection multiplexer, while retaining positive setup slack at 200 MHz.
+
+## Key Project Results
+
+- **10.9% switching-power reduction**
+- **15.0% cell-area reduction**
+- **+1550 ps setup slack**
+- **1,004 verification vectors**
+- **0 functional errors in the tested vectors**
+- **200 MHz timing closure**
 
 ## Repository Structure
 
@@ -77,13 +128,44 @@ This repository contains the shared team implementation for the project. The ori
 Power-Optimized-IEEE754-FP-Adder/
 ├── README.md
 ├── src/
-│   └── README.md
+│   ├── fp_adder_baseline.v
+│   └── fp_dual_path_adder.v
 ├── testbench/
-│   └── README.md
+│   ├── tb_fp_adder_baseline.v
+│   └── tb_fp_adder_core.v
 ├── synthesis/
-│   └── README.md
+│   ├── baseline/
+│   │   └── scripts/
+│   │       ├── run_synth.tcl
+│   │       └── constraints.sdc
+│   └── improved/
+│       └── scripts/
+│           ├── run_synth.tcl
+│           └── constraints.sdc
 └── docs/
     └── README.md
+```
+
+## Simulation
+
+Cadence Xcelium can be used to simulate the baseline and improved designs:
+
+```bash
+xrun testbench/tb_fp_adder_baseline.v src/fp_adder_baseline.v -access +rwc -gui
+
+xrun testbench/tb_fp_adder_core.v src/fp_dual_path_adder.v -access +rwc -gui
+```
+
+## Synthesis
+
+Cadence Genus scripts and SDC constraints are provided under the `synthesis/` directory.
+
+```bash
+cd synthesis/baseline/scripts
+genus -f run_synth.tcl
+
+cd ../../improved/scripts
+genus -f run_synth.tcl
 ```
 
 ## Publication
@@ -92,8 +174,8 @@ The work was accepted and presented at **IEEE SPAC-AID 2026**, IEEE Madhya Prade
 
 ## Tools
 
-**Cadence Xcelium · SimVision · Genus · Static Timing Analysis · GPDK 45 nm**
+**Verilog HDL · Cadence Xcelium · SimVision · Genus · Static Timing Analysis · GPDK 45 nm**
 
 ## Note
 
-Proprietary Cadence libraries, foundry PDK files, generated databases, and restricted design files are not included.
+Proprietary Cadence libraries, foundry PDK files, generated databases, and other restricted design files are not included in this repository.
