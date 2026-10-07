@@ -67,6 +67,10 @@ The implementation uses 32-bit DFF registers for A, B, and RESULT, enabling regi
 
 Real VCD activity was used for switching activity analysis rather than relying on the default activity assumption.
 
+## Team Project and Documentation
+
+This repository contains the shared team implementation for the project. The original team documentation, paper, and project report are available in the public repository maintained by teammate [Ashit Raj](https://github.com/ashitraj634/Power-Optimized-IEEE754-fp-Adder).
+
 ## Repository Structure
 
 ```
